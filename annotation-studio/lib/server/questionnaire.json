@@ -1,0 +1,222 @@
+[
+  {
+    "id": "1",
+    "question": "For an item you can assess, what must you record?",
+    "options": [
+      {
+        "value": "A",
+        "label": "One overall 1\u20135 score"
+      },
+      {
+        "value": "B",
+        "label": "Eight scores without reasons"
+      },
+      {
+        "value": "C",
+        "label": "Eight 1\u20135 scores, reasons and needed corrections"
+      },
+      {
+        "value": "D",
+        "label": "A rewritten question and answer only"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "question": "How should you distinguish scores 4 and 5?",
+    "options": [
+      {
+        "value": "A",
+        "label": "4: fully successful; 5: an explained exceptional strength"
+      },
+      {
+        "value": "B",
+        "label": "4: flawed; 5: error-free"
+      },
+      {
+        "value": "C",
+        "label": "4: simple; 5: difficult"
+      },
+      {
+        "value": "D",
+        "label": "4 and 5 mean the same thing"
+      }
+    ]
+  },
+  {
+    "id": "3",
+    "question": "How should an important unsupported assertion affect scoring?",
+    "options": [
+      {
+        "value": "A",
+        "label": "Give every criterion 1"
+      },
+      {
+        "value": "B",
+        "label": "Give Grounding 3 and leave other scores unchanged"
+      },
+      {
+        "value": "C",
+        "label": "Mark every criterion \u201ccannot assess\u201d"
+      },
+      {
+        "value": "D",
+        "label": "Give Grounding at most 2; judge other criteria separately"
+      }
+    ]
+  },
+  {
+    "id": "4",
+    "question": "No relevant numbers or references apply. What do you record for Numerical fidelity?",
+    "options": [
+      {
+        "value": "A",
+        "label": "1"
+      },
+      {
+        "value": "B",
+        "label": "4 and \u201cnot applicable\u201d"
+      },
+      {
+        "value": "C",
+        "label": "5"
+      },
+      {
+        "value": "D",
+        "label": "\u201cCannot assess\u201d"
+      }
+    ]
+  },
+  {
+    "id": "5",
+    "question": "When should you use \u201ccannot assess\u201d?",
+    "options": [
+      {
+        "value": "A",
+        "label": "The answer is known to be unsupported"
+      },
+      {
+        "value": "B",
+        "label": "The wording is poor"
+      },
+      {
+        "value": "C",
+        "label": "Any score would be below 4"
+      },
+      {
+        "value": "D",
+        "label": "Needed material or expertise is missing; explain why"
+      }
+    ]
+  },
+  {
+    "id": "6",
+    "question": "What do you use to judge factual support and Linguistic quality, respectively?",
+    "options": [
+      {
+        "value": "A",
+        "label": "Supplied text; the question\u2019s original language"
+      },
+      {
+        "value": "B",
+        "label": "Supplied text; an English translation only"
+      },
+      {
+        "value": "C",
+        "label": "Outside sources; the original language"
+      },
+      {
+        "value": "D",
+        "label": "Outside sources; an English translation only"
+      }
+    ]
+  },
+  {
+    "id": "7",
+    "question": "When checking whether a question stands on its own, how should you handle missing context?",
+    "options": [
+      {
+        "value": "A",
+        "label": "Fill it in from the document"
+      },
+      {
+        "value": "B",
+        "label": "Assume the most likely subject"
+      },
+      {
+        "value": "C",
+        "label": "Judge only the information in the question"
+      },
+      {
+        "value": "D",
+        "label": "Ignore missing context if the grammar is correct"
+      }
+    ]
+  },
+  {
+    "id": "8",
+    "question": "Before lowering a score because an answer is too long, what should you check?",
+    "options": [
+      {
+        "value": "A",
+        "label": "Whether it exceeds a fixed word limit"
+      },
+      {
+        "value": "B",
+        "label": "Whether a shorter continuous passage preserves all needed information and qualifications"
+      },
+      {
+        "value": "C",
+        "label": "Whether another answer is shorter"
+      },
+      {
+        "value": "D",
+        "label": "Whether technical terms can be removed"
+      }
+    ]
+  },
+  {
+    "id": "9",
+    "question": "What should a useful explanation of a score include?",
+    "options": [
+      {
+        "value": "A",
+        "label": "The score number repeated in words"
+      },
+      {
+        "value": "B",
+        "label": "A general impression such as \u201cgood\u201d or \u201cbad\u201d"
+      },
+      {
+        "value": "C",
+        "label": "A specific strength or problem relevant to that criterion"
+      },
+      {
+        "value": "D",
+        "label": "A comparison with the previous item"
+      }
+    ]
+  },
+  {
+    "id": "10",
+    "question": "What should you do when an answer provides only part of the requested information?",
+    "options": [
+      {
+        "value": "A",
+        "label": "Give full marks because the supplied facts are correct"
+      },
+      {
+        "value": "B",
+        "label": "Identify what is missing and lower the affected scores appropriately"
+      },
+      {
+        "value": "C",
+        "label": "Give every criterion 1"
+      },
+      {
+        "value": "D",
+        "label": "Use \u201ccannot assess\u201d for every criterion"
+      }
+    ]
+  }
+]

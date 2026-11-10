@@ -1,0 +1,10 @@
+document,question,answer
+"HYPOTHETICAL CHEMISTRY EXAMPLE — Catalyst screening
+
+A model substrate was reacted with catalyst C at a loading of 2 mol% in ethanol for 4 hours. At 60 °C, substrate conversion was 72%; at 80 °C, conversion was 91%. All experiments used the same initial substrate concentration of 0.10 mol/L. Conversion was measured by gas chromatography; isolated yields were not determined.",What substrate conversion was measured at 80 °C with 2 mol% catalyst C after 4 hours in ethanol?,"Substrate conversion was 91%, measured by gas chromatography."
+"HYPOTHETICAL CHEMISTRY EXAMPLE — Formulation study
+
+The aqueous formulation contained 5% polymer P by mass, calculated relative to the total mass of the formulation. The solution was stirred at 25 °C for 30 minutes before measurement. No stability measurements were performed beyond the day of preparation.","What was the polymer P concentration, and what was the basis of the percentage?",The formulation contained 5% polymer P by volume.
+"HYPOTHETICAL CHEMISTRY EXAMPLE — Material characterisation
+
+The porous material adsorbed water vapour under the tested laboratory conditions. The authors proposed that this behaviour might support future humidity-control applications, but no device testing or long-term cycling experiments were carried out.",Has the porous material been demonstrated to provide long-term humidity control in a device?,Yes. The material has been demonstrated to provide reliable long-term humidity control in devices.
