@@ -54,7 +54,9 @@ export default defineConfig(async ({ command }) => {
     },
     plugins: [
       vinext(),
-      sites({ mockAuth: !managedLinux }),
+      // Local accounts use password-backed sessions. Never auto-sign in the
+      // starter's shared development administrator.
+      sites({ mockAuth: false }),
       connectorPreview(),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },

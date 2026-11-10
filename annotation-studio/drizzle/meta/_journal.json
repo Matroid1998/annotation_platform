@@ -15,6 +15,20 @@
       "when": 1794243249882,
       "tag": "0001_chunky_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794333188364,
+      "tag": "0002_fuzzy_blonde_phantom",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794334843524,
+      "tag": "0003_mature_stranger",
+      "breakpoints": true
     }
   ]
 }

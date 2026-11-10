@@ -1,25 +1,42 @@
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
-import { AnnotationService, type Actor } from "./service";
+import { headers } from "next/headers";
+import { AnnotationService } from "./service";
 import { ApiError } from "./validation";
+import { AuthService, AuthError, readSessionToken, assertExpectedActor, type AuthActor } from "./auth";
 
-type AppEnvironment = Cloudflare.Env & { ADMIN_EMAILS?: string; ADMIN_USER_IDS?: string };
+type AppEnvironment = Cloudflare.Env & { AUTH_MODE?: string; ADMIN_EMAILS?: string; ADMIN_USER_IDS?: string };
 const noCache = { "Cache-Control": "private, no-store, max-age=0", "Pragma": "no-cache", "Vary": "Cookie", "X-Content-Type-Options": "nosniff" };
 function list(value?: string) { return (value ?? "").split(",").map((entry) => entry.trim()).filter(Boolean); }
-export function configured() { const e = env as AppEnvironment; return list(e.ADMIN_EMAILS).length > 0 || list(e.ADMIN_USER_IDS).length > 0; }
-export async function actor(): Promise<Actor | null> {
+export function authMode(): "local" | "chatgpt" { return (env as AppEnvironment).AUTH_MODE === "chatgpt" ? "chatgpt" : "local"; }
+function database() {
+  const db = (env as AppEnvironment).DB;
+  if (!db) throw new ApiError(503, "The annotation database is not configured. No annotations can be submitted yet.");
+  return db.withSession("first-primary");
+}
+export function localAuth() {
+  if (authMode() !== "local") throw new ApiError(404, "Local sign-in is not enabled.");
+  return new AuthService(database());
+}
+export async function configured() {
+  if (authMode() === "local") return (env as AppEnvironment).DB ? localAuth().configured() : false;
+  const e = env as AppEnvironment;
+  return list(e.ADMIN_EMAILS).length > 0 || list(e.ADMIN_USER_IDS).length > 0;
+}
+export async function actor(): Promise<AuthActor | null> {
+  if (authMode() === "local") return localAuth().actor(readSessionToken((await headers()).get("cookie")));
   const user = await getChatGPTUser();
   if (!user) return null;
   const e = env as AppEnvironment;
   const isAdmin = list(e.ADMIN_USER_IDS).includes(user.userId) || list(e.ADMIN_EMAILS).map((entry) => entry.toLowerCase()).includes(user.email.toLowerCase());
-  return { id: user.userId, name: user.displayName, email: user.email, isAdmin };
+  return { id: user.userId, name: user.displayName, email: user.email, isAdmin, mustChangePassword: false };
 }
 export async function service() {
   const user = await actor();
   if (!user) throw new ApiError(401, "Sign in to continue.");
-  const db = (env as AppEnvironment).DB;
-  if (!db) throw new ApiError(503, "The annotation database is not configured. No annotations can be submitted yet.");
-  const instance = new AnnotationService(db.withSession("first-primary"), user);
+  assertExpectedActor((await headers()).get("X-Annotation-Actor"), user);
+  if (user.mustChangePassword) throw new AuthError(403, "Change your temporary password before opening your workspace.", "PASSWORD_CHANGE_REQUIRED");
+  const instance = new AnnotationService(database(), user);
   await instance.claimInvitations();
   return instance;
 }
@@ -27,7 +44,7 @@ export function json(value: unknown, status = 200, headers?: Record<string, stri
 export async function handle(work: () => Promise<unknown>): Promise<Response> {
   try { const result = await work(); return result instanceof Response ? result : json(result); }
   catch (error) {
-    if (error instanceof ApiError) return json({ error: error.message }, error.status);
+    if (error instanceof ApiError) return json({ error: error.message, ...(error instanceof AuthError && error.code ? { code: error.code } : {}) }, error.status, error instanceof AuthError && error.retryAfter ? { "Retry-After": String(error.retryAfter) } : undefined);
     console.error("Annotation API request failed", error instanceof Error ? error.name : "Unknown error");
     return json({ error: "The server could not complete this request. If you were submitting, keep this page open and retry; your existing saved annotations are unchanged." }, 503);
   }
