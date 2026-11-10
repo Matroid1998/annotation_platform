@@ -1,7 +1,7 @@
 export type AuthMode = 'local' | 'chatgpt';
 export type AuthUser = { id: string; name: string; email: string };
-export type AuthResult = { user: AuthUser; isAdmin: boolean; mustChangePassword: boolean };
-export type AuthSession = { user: AuthUser | null; isAdmin: boolean; authMode: AuthMode; mustChangePassword: boolean; configured?: boolean };
+export type AuthResult = { user: AuthUser; isAdmin: boolean };
+export type AuthSession = { user: AuthUser | null; isAdmin: boolean; authMode: AuthMode; configured?: boolean };
 
 export function safeReturnPath(value: string | null | undefined, fallback = '/'): string {
   if (!value || !value.startsWith('/') || value.startsWith('//') || /[\\\u0000-\u0020\u007f]/.test(value)) return fallback;
@@ -13,12 +13,11 @@ export function safeReturnPath(value: string | null | undefined, fallback = '/')
   } catch { return fallback; }
 }
 
-export function accountDestination(account: { isAdmin: boolean; mustChangePassword: boolean }, requested?: string | null): string {
+export function accountDestination(account: { isAdmin: boolean; mustChangePassword?: boolean }, requested?: string | null): string {
   const fallback = account.isAdmin ? '/admin' : '/';
   let target = safeReturnPath(requested, fallback);
   const pathname = new URL(target, 'https://annotation.invalid').pathname;
   if (!account.isAdmin && (pathname === '/admin' || pathname.startsWith('/admin/'))) target = '/';
-  if (account.mustChangePassword) return `/account/password${target !== fallback ? `?return_to=${encodeURIComponent(target)}` : ''}`;
   return target;
 }
 

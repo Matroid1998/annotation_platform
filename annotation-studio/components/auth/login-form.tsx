@@ -41,7 +41,7 @@ export default function LoginForm() {
     setPending(true); setError('');
     try {
       const result = await authRequest<AuthResult>('/api/auth/login', { email: email.trim(), password });
-      if (!result.user?.id || typeof result.isAdmin !== 'boolean' || typeof result.mustChangePassword !== 'boolean') throw new Error('The server did not confirm your sign-in. Please try again.');
+      if (!result.user?.id || typeof result.isAdmin !== 'boolean') throw new Error('The server did not confirm your sign-in. Please try again.');
       setPassword('');
       window.location.replace(accountDestination(result, returnTo.current));
     } catch (failure) {

@@ -1,13 +1,10 @@
-import { assertExpectedActor, authResponse, readSessionToken, sessionCookie } from "@/lib/server/auth";
-import { handle, json, localAuth, readJson } from "@/lib/server/http";
 export const dynamic = "force-dynamic";
-export async function POST(request: Request) {
-  return handle(async () => {
-    const auth = localAuth();
-    const token = readSessionToken(request.headers.get("cookie"));
-    const current = await auth.actor(token);
-    if (current) assertExpectedActor(request.headers.get("X-Annotation-Actor"), current);
-    const result = await auth.changePassword(token, await readJson(request));
-    return json(authResponse(result), 200, { "Set-Cookie": sessionCookie(result.token, request.url, result.expiresAt) });
+
+// Keep old clients from changing credentials after the self-service page is
+// removed. Only administrator account controls may reset annotator passwords.
+export async function POST() {
+  return Response.json({ error: "Passwords are managed by an administrator.", code: "PASSWORD_CHANGE_DISABLED" }, {
+    status: 403,
+    headers: { "Cache-Control": "private, no-store, max-age=0", "Pragma": "no-cache", "Vary": "Cookie", "X-Content-Type-Options": "nosniff" },
   });
 }

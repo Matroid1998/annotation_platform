@@ -29,6 +29,13 @@
       "when": 1794334843524,
       "tag": "0003_mature_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794336173081,
+      "tag": "0004_administrator_managed_passwords",
+      "breakpoints": true
     }
   ]
 }

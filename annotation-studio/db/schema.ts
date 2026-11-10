@@ -2,6 +2,8 @@ import { sqliteTable, text, integer, primaryKey, uniqueIndex } from "drizzle-orm
 
 export const localAccounts = sqliteTable("local_accounts", {
   id: text("id").primaryKey(), email: text("email").notNull(), name: text("name").notNull(), passwordHash: text("password_hash").notNull(),
+  // must_change_password is retained for existing databases only. Authentication
+  // ignores it; account creation and administrator resets explicitly store 0.
   role: text("role", { enum: ["admin", "annotator"] }).notNull(), active: integer("active").notNull().default(1), mustChangePassword: integer("must_change_password").notNull().default(1),
   createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
 }, (t) => [uniqueIndex("local_account_email").on(t.email)]);

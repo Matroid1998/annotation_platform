@@ -5,7 +5,7 @@ import {
   ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, Check, CheckCheck,
   CheckCircle2, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
   FileCheck2, FileText, FlaskConical, Globe2, LayoutGrid, Loader2,
-  KeyRound, LockKeyhole, MessageSquare, PanelLeftClose, Scale, ShieldCheck,
+  LockKeyhole, MessageSquare, PanelLeftClose, Scale, ShieldCheck,
   SlidersHorizontal, Sparkles, X,
 } from 'lucide-react';
 import { CRITERIA, QUESTIONS } from '@/lib/guidelines';
@@ -14,7 +14,7 @@ import SignOutButton from '@/components/auth/sign-out-button';
 import Onboarding, { OnboardingSteps, type Qualification, type TestQuestion } from './onboarding';
 
 type Project = { id: string; name: string; domain: string; description: string; total: number; submitted: number; qualified: boolean; qualificationReady: boolean };
-type Session = { user: { id: string; name: string; email: string } | null; isAdmin: boolean; projects: Project[]; configured: boolean; authMode: 'local' | 'chatgpt'; mustChangePassword: boolean };
+type Session = { user: { id: string; name: string; email: string } | null; isAdmin: boolean; projects: Project[]; configured: boolean; authMode: 'local' | 'chatgpt' };
 type Rating = { criterionId: string; score: number | null | undefined; comment: string };
 type Receipt = { id: string; savedAt: string; requestId: string; ratings?: Rating[]; comment?: string };
 type AnnotationDoc = { id: string; title: string; source: string; question: string; answer: string; submission?: Receipt };
@@ -44,7 +44,6 @@ async function api<T>(path: string, body?: unknown, expectedActor?: string): Pro
       const failure = new Error(typeof detail === 'string' ? detail : typeof value.message === 'string' ? value.message : 'The request could not be completed. Please try again.');
       Object.assign(failure, { status: response.status, code: value.code });
       if (response.status === 401 || value.code === 'SESSION_ACCOUNT_MISMATCH') window.dispatchEvent(new Event('annotation:session-expired'));
-      if (value.code === 'PASSWORD_CHANGE_REQUIRED') window.dispatchEvent(new Event('annotation:password-required'));
       throw failure;
     }
     return value as T;
@@ -82,6 +81,7 @@ export default function AnnotationApp() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [testResult, setTestResult] = useState<{ passed: boolean; correct: number; total: number } | null>(null);
   const [testBusy, setTestBusy] = useState(false);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [guidelineChecked, setGuidelineChecked] = useState(false);
   const [acknowledging, setAcknowledging] = useState(false);
   const [demoProgress, setDemoProgress] = useState<Record<string, Qualification>>({});
@@ -102,7 +102,7 @@ export default function AnnotationApp() {
     const isDemo = new URLSearchParams(window.location.search).get('demo') === '1';
     setDemo(isDemo);
     if (isDemo) {
-      setSession({ user: null, isAdmin: false, projects: [], configured: true, authMode: 'local', mustChangePassword: false });
+      setSession({ user: null, isAdmin: false, projects: [], configured: true, authMode: 'local' });
       const p = DEMO_PROJECTS[0];
       setProject(p);
       let progress: Record<string, Qualification> = {};
@@ -120,18 +120,15 @@ export default function AnnotationApp() {
       else setView(qualification.guidelineRead ? 'qualification' : 'guidelines');
     } else {
       api<Session>('/api/session').then(current => {
-        if (current.mustChangePassword) { window.location.replace('/account/password'); return; }
         setSession(current);
-      }).catch(e => { setError(errorMessage(e)); setSession({ user: null, isAdmin: false, projects: [], configured: false, authMode: 'local', mustChangePassword: false }); });
+      }).catch(e => { setError(errorMessage(e)); setSession({ user: null, isAdmin: false, projects: [], configured: false, authMode: 'local' }); });
     }
   }, []);
 
   useEffect(() => {
     const expired = () => setSessionExpired(true);
-    const passwordRequired = () => window.location.assign('/account/password');
     window.addEventListener('annotation:session-expired', expired);
-    window.addEventListener('annotation:password-required', passwordRequired);
-    return () => { window.removeEventListener('annotation:session-expired', expired); window.removeEventListener('annotation:password-required', passwordRequired); };
+    return () => window.removeEventListener('annotation:session-expired', expired);
   }, []);
 
   useEffect(() => {
@@ -154,7 +151,6 @@ export default function AnnotationApp() {
       const current = await api<Session>('/api/session');
       if (!current.user) throw new Error('Please sign in, then check your session again.');
       if (current.user.id !== user?.id) throw new Error(`A different account is signed in. Sign in as ${user?.email || 'the original annotator'} to continue this review. Your draft remains unchanged.`);
-      if (current.mustChangePassword) { window.location.assign('/account/password'); return; }
       setSession(current); setSessionExpired(false); setError('');
     } catch (failure) { setError(errorMessage(failure)); }
     finally { setCheckingSession(false); }
@@ -166,7 +162,7 @@ export default function AnnotationApp() {
   }
 
   function canLeave() {
-    if (saving || testBusy || acknowledging || busy) return false;
+    if (saving || testBusy || checkingAvailability || acknowledging || busy) return false;
     return !dirty || window.confirm('This document has no confirmed submission. Leave it? Any available recovery draft will remain in this browser.');
   }
 
@@ -253,6 +249,21 @@ export default function AnnotationApp() {
     } catch (e) { setError(errorMessage(e)); }
     finally { setAcknowledging(false); }
   }
+
+  async function checkTestAvailability() {
+    if (!project || demo || testBusy || checkingAvailability) return;
+    const projectId = project.id;
+    const sequence = loadSequence.current;
+    setCheckingAvailability(true); setError('');
+    try {
+      const data = await accountApi<ProjectData>(`/api/projects/${projectId}`);
+      if (sequence !== loadSequence.current) return;
+      // Refresh availability without resetting any selected answers.
+      setProjectData(previous => previous?.project.id === projectId ? { ...previous, qualification: data.qualification, questions: data.questions, documents: data.documents } : previous);
+      setSession(previous => previous ? { ...previous, projects: previous.projects.map(item => item.id === projectId ? { ...item, qualified: data.qualification.passed, qualificationReady: data.qualification.ready } : item) } : previous);
+    } catch (failure) { setError(errorMessage(failure)); }
+    finally { setCheckingAvailability(false); }
+  }
   function updateRating(id: string, change: Partial<Rating>) {
     if (!draft || receipt || saving || draft.pending) return;
     const existing = draft.ratings.find(r => r.criterionId === id);
@@ -296,7 +307,7 @@ export default function AnnotationApp() {
   }
 
   async function submitTest() {
-    if (!project || !projectData?.qualification.guidelineRead || projectData.qualification.passed || testBusy) return;
+    if (!project || !projectData?.qualification.guidelineRead || projectData.qualification.passed || testBusy || checkingAvailability) return;
     setTestBusy(true); setError('');
     try {
       const result = await accountApi<{ passed: boolean; correct: number; total: number }>(demo ? '/api/demo/qualify' : `/api/projects/${project.id}/qualify`, { answers });
@@ -330,7 +341,6 @@ export default function AnnotationApp() {
         <div className="sidebar-bottom">
           <div className="privacy-note"><ShieldCheck size={21} /><strong>Your independent review</strong><p>Your ratings are private. Other annotators cannot see your work.</p></div>
           <button className={`nav-item ${(view === 'guidelines' || view === 'qualification') ? 'active' : ''}`} disabled={!project} onClick={() => navigate('guidelines')}><BookOpen size={18} />Guidelines & qualification</button>
-          {user && !demo && session?.authMode !== 'chatgpt' && <a className="nav-item" href="/account/password" onClick={event => { if (!canLeave()) event.preventDefault(); }}><KeyRound size={18} />Change password</a>}
           {session?.isAdmin && !demo && <a className="nav-item" href="/admin"><SlidersHorizontal size={18} />Administration</a>}
           <div className="profile"><span className="profile-avatar">{user?.name?.slice(0, 2).toUpperCase() || 'AS'}</span><div><strong>{user?.name || 'Welcome'}</strong><small>{demo ? 'Demo annotator' : user ? session?.isAdmin ? 'Administrator' : 'Annotator' : 'Sign in to annotate'}</small></div>{user && !demo && <SignOutButton authMode={session?.authMode} onBeforeSignOut={canLeave} onSignedOut={clearSignedOutView} />}</div>
         </div>
@@ -348,7 +358,7 @@ export default function AnnotationApp() {
             <div className="section-heading"><h2>My projects <span>{projects.length}</span></h2><span>Only projects assigned to you appear here</span></div>
             {projects.length ? <div className="project-grid">{projects.map(p => <button key={p.id} className="project-card" onClick={() => openProject(p)}><span className={`project-card-icon ${p.id}`}><ProjectIcon id={p.id} size={26} /></span><span className="project-domain">{p.domain === 'chemistry' ? 'CHEMISTRY' : 'LEGAL RESEARCH'}</span><h3>{p.name}</h3><p>{p.description}</p><div className="project-card-progress"><span>{p.submitted} of {p.total} documents</span><span>{p.total ? Math.round(p.submitted / p.total * 100) : 0}%</span></div><div className="progress-track"><span style={{ width: `${p.total ? p.submitted / p.total * 100 : 0}%` }} /></div><div className="project-card-footer"><span>{p.qualified ? 'Continue annotation' : 'Complete qualification'}</span><ArrowRight size={17} /></div></button>)}</div> : <div className="welcome-card"><div className="welcome-icon"><BookOpen size={31} strokeWidth={1.3} /></div><h2>{user ? 'Your next project starts here' : 'Good research starts with a careful read.'}</h2><p>{user ? 'Your project administrator will assign your projects. Each project begins with its guideline and a short qualification test.' : 'Sign in to access your assigned projects, read the guidelines, and evaluate generated questions and answers in a focused workspace.'}</p><div className="welcome-actions">{!user && <a className="button" href={signInPath} target="_top">Sign in to your workspace <ArrowRight size={16} /></a>}{session?.isAdmin && <a className="button" href="/admin">Set up your projects <ArrowRight size={16} /></a>}<a className="button button-secondary" href="/?demo=1">Explore a sample workspace <ArrowRight size={16} /></a></div>{!session.configured && <p className="setup-caption">Administrator setup is required before projects can be assigned.</p>}</div>}
             <div className="workflow-note"><div><span>01</span><strong>Read & qualify</strong><p>Read your domain guidelines and answer every test question correctly.</p></div><div><span>02</span><strong>Review with care</strong><p>Assess the source, question, and answer using eight distinct criteria.</p></div><div><span>03</span><strong>Submit each document</strong><p>Each submission is saved individually. Wait for the server confirmation.</p></div></div>
-          </> : (view === 'guidelines' || view === 'qualification') && project && projectData ? <Onboarding project={project} qualification={projectData.qualification} mode={view} demo={demo} questions={currentQuestions} checked={guidelineChecked} setChecked={setGuidelineChecked} answers={answers} setAnswer={(id, value) => setAnswers(previous => ({ ...previous, [id]: value }))} result={testResult} acknowledging={acknowledging} testing={testBusy} onContinue={acknowledgeGuideline} onSubmitTest={submitTest} onBack={() => navigate('guidelines')} onStart={() => openProject(project)} /> : view === 'submissions' && project ? <>
+          </> : (view === 'guidelines' || view === 'qualification') && project && projectData ? <Onboarding project={project} qualification={projectData.qualification} mode={view} demo={demo} questions={currentQuestions} checked={guidelineChecked} setChecked={setGuidelineChecked} answers={answers} setAnswer={(id, value) => setAnswers(previous => ({ ...previous, [id]: value }))} result={testResult} acknowledging={acknowledging} testing={testBusy} checkingAvailability={checkingAvailability} onCheckAvailability={checkTestAvailability} onContinue={acknowledgeGuideline} onSubmitTest={submitTest} onBack={() => navigate('guidelines')} onStart={() => openProject(project)} /> : view === 'submissions' && project ? <>
             <div className="page-heading compact-heading"><div><div className="eyebrow">{project.name.toUpperCase()} · YOUR WORK</div><h1>Every review, accounted for.</h1><p>{demo ? 'Preview submissions from this demo session.' : 'These are your own submitted annotations. Other annotators’ ratings are private.'}</p></div></div><div className="white-card submission-list"><div className="section-heading"><h2>My submissions</h2><span>{projectData?.documents.filter(d => d.submitted).length || 0} documents</span></div>{projectData?.documents.filter(d => d.submitted).length ? projectData.documents.filter(d => d.submitted).map(d => <button className="submission-row" key={d.id} onClick={() => openDocument(d)}><span className="submission-check"><CheckCircle2 size={20} /></span><div><strong>{d.title}</strong><small>{d.id}</small></div><span>{demo ? 'Previewed' : 'Submitted'}</span><ArrowRight size={17} /></button>) : <div className="empty-state"><FileCheck2 size={32} strokeWidth={1.2} /><h3>No submissions yet</h3><p>Submit your first document to see its saved annotation here.</p><button className="button button-secondary" onClick={() => navigate('workspace')}>Back to workspace <ArrowRight size={15} /></button></div>}</div>
           </> : project && !projectData?.qualification.passed ? <div className="empty-state"><LockKeyhole size={32} /><h2>Start with the guideline</h2><p>Complete the qualification test to unlock this project’s documents.</p><button className="button" onClick={() => setView(projectData?.qualification.guidelineRead ? 'qualification' : 'guidelines')}>Continue onboarding <ArrowRight size={16} /></button></div> : doc && draft && project ? <>
             <OnboardingSteps current={3} guidelineRead={true} passed={true} />

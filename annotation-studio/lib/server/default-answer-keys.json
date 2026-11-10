@@ -1,0 +1,7 @@
+{
+  "version": "supplied-guidelines-v1",
+  "answers": {
+    "legal": ["C", "A", "D", "B", "D", "A", "C", "B", "C", "B"],
+    "chemistry": ["C", "A", "D", "B", "D", "A", "C", "B", "C", "B"]
+  }
+}

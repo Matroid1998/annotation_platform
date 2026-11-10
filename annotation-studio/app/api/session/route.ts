@@ -5,6 +5,6 @@ export async function GET() {
     const current = await actor();
     if (!current) return { user: null, isAdmin: false, projects: [], configured: await configured(), authMode: authMode(), mustChangePassword: false };
     const { isAdmin, mustChangePassword, ...user } = current;
-    return { user, isAdmin, projects: mustChangePassword ? [] : await (await service()).sessionProjects(), configured: await configured(), authMode: authMode(), mustChangePassword };
+    return { user, isAdmin, projects: await (await service()).sessionProjects(), configured: await configured(), authMode: authMode(), mustChangePassword };
   });
 }

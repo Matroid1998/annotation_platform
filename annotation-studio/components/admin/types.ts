@@ -3,11 +3,10 @@ export type AdminSession = {
   isAdmin: boolean;
   configured: boolean;
   authMode: "local" | "chatgpt";
-  mustChangePassword: boolean;
 };
 export type AdminProject = { id: string; name: string; domain: string; description: string; total: number; members: number };
-export type Membership = { projectId: string; email: string; createdAt?: string; userId?: string; name?: string; active?: boolean | number; mustChangePassword?: boolean | number };
-export type AnnotatorAccount = { id: string; name: string; email: string; role: "admin" | "annotator"; active: boolean; mustChangePassword: boolean; projectId: string | null; assignmentCount: number };
+export type Membership = { projectId: string; email: string; createdAt?: string; userId?: string; name?: string; active?: boolean | number };
+export type AnnotatorAccount = { id: string; name: string; email: string; role: "admin" | "annotator"; active: boolean; projectId: string | null; assignmentCount: number };
 export type AnswerKey = { domain: string; version: string; answers: string[] | null; proposedAnswers: string[]; confirmedAt: string | null; confirmed: boolean };
 export type KeyQuestion = { id: string; question: string; options: { value: string; label: string }[] };
 export type AdminData = { projects: AdminProject[]; memberships: Membership[]; answerKeys: AnswerKey[]; questions: KeyQuestion[]; accounts: AnnotatorAccount[] };

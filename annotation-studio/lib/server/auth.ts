@@ -26,9 +26,9 @@ export function normalizeEmail(value: unknown): string {
 function digest(value: string) { return createHash("sha256").update(value, "utf8").digest("hex"); }
 function tokenHash(token: string | null): string | null { return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? digest(token) : null; }
 function safeAccount(row: AccountRow): PublicAccount {
-  return { id: row.id, email: row.email, name: row.name, role: row.role, active: row.active === 1, mustChangePassword: row.must_change_password === 1, createdAt: row.created_at, updatedAt: row.updated_at };
+  return { id: row.id, email: row.email, name: row.name, role: row.role, active: row.active === 1, mustChangePassword: false, createdAt: row.created_at, updatedAt: row.updated_at };
 }
-function safeActor(row: AccountRow): AuthActor { return { id: row.id, email: row.email, name: row.name, isAdmin: row.role === "admin", mustChangePassword: row.must_change_password === 1 }; }
+function safeActor(row: AccountRow): AuthActor { return { id: row.id, email: row.email, name: row.name, isAdmin: row.role === "admin", mustChangePassword: false }; }
 function invalidCredentials(): never { throw new AuthError(401, "Email or password is incorrect.", "INVALID_CREDENTIALS"); }
 async function checkedHash(password: unknown) {
   try { return await hashPassword(password); }
@@ -118,29 +118,7 @@ export class AuthService {
     const hash = tokenHash(token);
     if (hash) await this.db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(hash).run();
   }
-  async changePassword(token: string | null, body: unknown): Promise<AuthResult> {
-    const account = await this.sessionAccount(token);
-    if (!account) throw new AuthError(401, "Sign in to change your password.", "UNAUTHENTICATED");
-    const input = object(body);
-    const rateHash = await this.consumeRate(`password-change:${account.id}`, LOGIN_LIMIT);
-    if (!await verifyPassword(input.currentPassword, account.password_hash)) invalidCredentials();
-    if (input.currentPassword === input.newPassword) throw new ApiError(400, "Choose a different password from your current password.");
-    const passwordHash = await checkedHash(input.newPassword);
-    const nextToken = randomBytes(32).toString("base64url");
-    const now = this.timestamp();
-    const expiresAt = new Date(this.now() + SESSION_LIFETIME_SECONDS * 1000).toISOString();
-    const result = await this.db.batch([
-      this.db.prepare("UPDATE local_accounts SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ? AND password_hash = ? AND active = 1 AND EXISTS (SELECT 1 FROM auth_sessions WHERE token_hash = ? AND user_id = local_accounts.id AND expires_at > ?)").bind(passwordHash, now, account.id, account.password_hash, tokenHash(token), now),
-      this.db.prepare("DELETE FROM auth_sessions WHERE user_id = ? AND EXISTS (SELECT 1 FROM local_accounts WHERE id = ? AND password_hash = ? AND active = 1)").bind(account.id, account.id, passwordHash),
-      this.db.prepare("INSERT INTO auth_sessions (token_hash, user_id, created_at, expires_at) SELECT ?, id, ?, ? FROM local_accounts WHERE id = ? AND password_hash = ? AND active = 1").bind(digest(nextToken), now, expiresAt, account.id, passwordHash),
-      this.db.prepare("DELETE FROM auth_rate_limits WHERE scope_hash = ? AND EXISTS (SELECT 1 FROM local_accounts WHERE id = ? AND password_hash = ?)").bind(rateHash, account.id, passwordHash),
-    ]);
-    if (!result[0].meta.changes || !result[2].meta.changes) throw new AuthError(409, "Your account changed while this request was running. Sign in again.", "ACCOUNT_CHANGED");
-    const confirmed = await this.sessionAccount(nextToken);
-    if (!confirmed) throw new AuthError(401, "Sign in again to continue.", "UNAUTHENTICATED");
-    return { actor: safeActor(confirmed), token: nextToken, expiresAt };
-  }
-  async createAccount(input: { id?: string; name: unknown; email: unknown; password: unknown; role: LocalRole; mustChangePassword?: boolean }, extraStatements: D1PreparedStatement[] = []): Promise<PublicAccount> {
+  async createAccount(input: { id?: string; name: unknown; email: unknown; password: unknown; role: LocalRole }, extraStatements: D1PreparedStatement[] = []): Promise<PublicAccount> {
     const id = input.id === undefined ? crypto.randomUUID() : validId(input.id, "Account ID");
     const email = normalizeEmail(input.email);
     const name = string(input.name, "Name", 120);
@@ -149,7 +127,7 @@ export class AuthService {
     const now = this.timestamp();
     try {
       await this.db.batch([
-        this.db.prepare("INSERT INTO local_accounts (id, email, name, password_hash, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)").bind(id, email, name, passwordHash, input.role, input.mustChangePassword === false ? 0 : 1, now, now),
+        this.db.prepare("INSERT INTO local_accounts (id, email, name, password_hash, role, active, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)").bind(id, email, name, passwordHash, input.role, 0, now, now),
         ...extraStatements,
       ]);
     } catch (error) {
@@ -160,12 +138,12 @@ export class AuthService {
     if (!row) throw new ApiError(503, "The account was created but confirmation is unavailable. Refresh the accounts list before retrying.");
     return safeAccount(row);
   }
-  async resetPassword(userId: string, password: unknown, options: { mustChangePassword?: boolean } = {}): Promise<void> {
+  async resetPassword(userId: string, password: unknown): Promise<void> {
     const account = await this.db.prepare("SELECT * FROM local_accounts WHERE id = ?").bind(userId).first<AccountRow>();
     if (!account) throw new ApiError(404, "Account not found.");
     const passwordHash = await checkedHash(password);
     await this.db.batch([
-      this.db.prepare("UPDATE local_accounts SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ?").bind(passwordHash, options.mustChangePassword === false ? 0 : 1, this.timestamp(), userId),
+      this.db.prepare("UPDATE local_accounts SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ?").bind(passwordHash, 0, this.timestamp(), userId),
       this.db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").bind(userId),
       this.db.prepare("DELETE FROM auth_rate_limits WHERE scope_hash IN (?, ?)").bind(digest(`login-email:${account.email}`), digest(`password-change:${userId}`)),
     ]);

@@ -4,6 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashPassword } from '../lib/server/password.ts';
+import { localAnswerKeySeedSql } from './local-answer-keys.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 process.chdir(root);
@@ -57,7 +58,7 @@ run([...wrangler, 'd1', 'migrations', 'apply', 'DB', ...local]);
 
 const { SAMPLE_DOCUMENTS } = await import('../lib/sample-documents.ts');
 const now = new Date().toISOString();
-const sql = [];
+const sql = [localAnswerKeySeedSql(now)];
 for (const [project, documents] of Object.entries(SAMPLE_DOCUMENTS)) {
   for (const doc of documents) {
     const hash = createHash('sha256').update(JSON.stringify([doc.source, doc.question, doc.answer])).digest('hex');
@@ -77,7 +78,7 @@ for (const account of defaults) {
   if (existing.some((row) => row.id === account.id || row.email === account.email)) continue;
   const password = randomBytes(24).toString('base64url');
   const hash = await hashPassword(password);
-  sql.push(`INSERT INTO local_accounts (id,email,name,password_hash,role,active,must_change_password,created_at,updated_at) VALUES (${[account.id,account.email,account.name,hash,account.role].map(sqlString).join(',')},1,1,${sqlString(now)},${sqlString(now)});`);
+  sql.push(`INSERT INTO local_accounts (id,email,name,password_hash,role,active,must_change_password,created_at,updated_at) VALUES (${[account.id,account.email,account.name,hash,account.role].map(sqlString).join(',')},1,0,${sqlString(now)},${sqlString(now)});`);
   if (account.project) sql.push(`INSERT INTO memberships (project_id,email,user_id,created_at) VALUES (${[account.project,account.email,account.id,now].map(sqlString).join(',')});`);
   created.push({ email: account.email, password, role: account.role, project: account.project });
 }
@@ -85,11 +86,11 @@ const seedFile = '.sites-runtime/local-sample-seed.sql';
 writeFileSync(seedFile, sql.join('\n'), { mode: 0o600 });
 chmodSync(seedFile, 0o600);
 const credentialsFile = '.sites-runtime/local-credentials.json';
-if (created.length) {
+if (created.length || existsSync(credentialsFile)) {
   let previous = [];
   if (existsSync(credentialsFile)) previous = JSON.parse(readFileSync(credentialsFile, 'utf8')).accounts ?? [];
   writeFileSync(credentialsFile, JSON.stringify({
-    note: 'Initial local passwords only. Each account must change its password on first sign-in. Changed passwords are not stored in this file. Keep this untracked file private.',
+    note: 'Initial local passwords only. Sign in with the assigned password; users cannot change their own passwords. Administrators can reset annotator passwords. Reset passwords are not stored in this file. Keep this untracked file private.',
     accounts: [...previous.filter((row) => !created.some((account) => account.email === row.email)), ...created],
   }, null, 2) + '\n', { mode: 0o600 });
   chmodSync(credentialsFile, 0o600);
@@ -97,4 +98,5 @@ if (created.length) {
 // Keep generated credentials recoverable even if the local seed is interrupted.
 run([...wrangler, 'd1', 'execute', 'DB', ...local, '--file', seedFile]);
 console.log(`\nLocal setup complete. ${created.length} new accounts created. Existing passwords, assignments, qualifications, and submissions were preserved.\n`);
+console.log('Missing qualification keys were initialized from the supplied guidelines. Existing administrator keys and key history were preserved.');
 console.log(`Initial credentials: ${path.join(root, credentialsFile)}\nRun npm run dev and open /login. Sign in as seedy@sites.test to manage accounts, projects, and qualification keys.\nEach annotator is assigned to exactly one project; multiple annotators can share that project.\n`);

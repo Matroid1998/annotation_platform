@@ -540,22 +540,25 @@ test('legacy multiple assignments fail closed for project lists, content, qualif
 test('administrator creates an individual annotator account atomically and cannot elevate it via submitted fields', async () => {
   const { db, admin, alice } = await setup();
   try {
-    const payload = { action: 'createAnnotator', projectId: 'un', name: 'New Annotator', email: 'NEW@example.test', password: 'Temporary passphrase 123!', role: 'admin', isAdmin: true, mustChangePassword: false };
+    const payload = { action: 'createAnnotator', projectId: 'un', name: 'New Annotator', email: 'NEW@example.test', password: 'Temporary passphrase 123!', role: 'admin', isAdmin: true, mustChangePassword: true };
     await assert.rejects(alice.adminAction(payload), expectStatus(403));
     const created = await admin.adminAction(payload);
     assert.equal(created.account.role, 'annotator');
-    assert.equal(created.account.mustChangePassword, true);
+    assert.equal(created.account.mustChangePassword, false);
     assert.equal(created.account.email, 'new@example.test');
     assert.equal('password_hash' in created.account, false);
     const row = db.sqlite.prepare('SELECT * FROM local_accounts WHERE id=?').get(created.account.id);
     assert.match(row.password_hash, /^scrypt\$/);
     assert.notEqual(row.password_hash, payload.password);
     assert.equal(row.role, 'annotator');
-    assert.equal(row.must_change_password, 1);
+    assert.equal(row.must_change_password, 0);
     assert.equal(db.sqlite.prepare('SELECT project_id FROM memberships WHERE user_id=?').get(row.id).project_id, 'un');
     const login = await new AuthService(db).login({ email: row.email, password: payload.password }, 'new-account-test');
     assert.equal(login.actor.isAdmin, false);
-    assert.equal(login.actor.mustChangePassword, true);
+    assert.equal(login.actor.mustChangePassword, false);
+    const newAnnotator = new AnnotationService(db, login.actor);
+    assert.deepEqual((await newAnnotator.sessionProjects()).map((project) => project.id), ['un']);
+    assert.equal((await newAnnotator.project('un')).qualification.guidelineRead, false);
     await assert.rejects(admin.adminAction(payload), expectStatus(409));
     assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM local_accounts WHERE email=?').get(row.email).n, 1);
     const overview = await admin.adminOverview();
@@ -597,13 +600,14 @@ test('password reset and account suspension revoke sessions without changing qua
     const beforePass = db.sqlite.prepare('SELECT * FROM qualifications WHERE user_id=?').get('alice');
     const beforeSubmission = db.sqlite.prepare('SELECT * FROM submissions WHERE user_id=?').get('alice');
     const auth = new AuthService(db);
-    await auth.resetPassword('alice', 'Initial unique password 123!', { mustChangePassword: false });
+    await auth.resetPassword('alice', 'Initial unique password 123!');
     const signedIn = await auth.login({ email: actors.alice.email, password: 'Initial unique password 123!' }, 'reset-test');
     await admin.adminAction({ action: 'resetAnnotatorPassword', email: actors.alice.email, password: 'Replacement secret 456!' });
     assert.equal(await auth.actor(signedIn.token), null);
-    assert.equal(db.sqlite.prepare('SELECT must_change_password FROM local_accounts WHERE id=?').get('alice').must_change_password, 1);
+    assert.equal(db.sqlite.prepare('SELECT must_change_password FROM local_accounts WHERE id=?').get('alice').must_change_password, 0);
     const nextLogin = await auth.login({ email: actors.alice.email, password: 'Replacement secret 456!' }, 'reset-test');
-    assert.equal(nextLogin.actor.mustChangePassword, true);
+    assert.equal(nextLogin.actor.mustChangePassword, false);
+    assert.equal((await new AnnotationService(db, nextLogin.actor).document('eurlex', 'doc-1')).submission.id, receipt.id);
     assert.deepEqual(db.sqlite.prepare('SELECT * FROM qualifications WHERE user_id=?').get('alice'), beforePass);
     assert.deepEqual(db.sqlite.prepare('SELECT * FROM submissions WHERE user_id=?').get('alice'), beforeSubmission);
     assert.equal((await alice.document('eurlex', 'doc-1')).submission.id, receipt.id);

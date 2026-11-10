@@ -1,4 +1,5 @@
 import questions from "./questionnaire.json";
+import defaultAnswerKeys from "./default-answer-keys.json";
 import { ApiError, object, string, validId, validateAnswers, validateSubmission, type Domain } from "./validation";
 import { AuthService, normalizeEmail } from "./auth";
 
@@ -15,7 +16,6 @@ export const PROJECTS: Project[] = [
   { id: "un", name: "United Nations", domain: "legal", description: "United Nations legal texts" },
   { id: "chemistry", name: "Chemistry", domain: "chemistry", description: "Chemistry research and technical texts" },
 ];
-const proposedAnswers = ["C", "A", "D", "B", "D", "A", "C", "B", "C", "B"];
 export function projectById(id: string): Project {
   const project = PROJECTS.find((p) => p.id === id);
   if (!project) throw new ApiError(404, "Project not found.");
@@ -159,15 +159,15 @@ export class AnnotationService {
   }
   async adminOverview() {
     requireAdmin(this.actor);
-    const memberships = (await this.db.prepare("SELECT m.project_id AS projectId, m.email, m.user_id AS userId, m.created_at AS createdAt, a.name, a.active, a.must_change_password AS mustChangePassword FROM memberships m LEFT JOIN local_accounts a ON a.id = m.user_id ORDER BY m.project_id, m.email").all()).results;
-    const accounts = (await this.db.prepare("SELECT a.id, a.name, a.email, a.role, a.active, a.must_change_password AS mustChangePassword, CASE WHEN count(m.project_id) = 1 THEN min(m.project_id) ELSE NULL END AS projectId, count(m.project_id) AS assignmentCount FROM local_accounts a LEFT JOIN memberships m ON m.user_id = a.id OR lower(m.email) = lower(a.email) GROUP BY a.id ORDER BY a.name, a.email").all<{ active: number; mustChangePassword: number; [key: string]: unknown }>()).results.map((account) => ({ ...account, active: !!account.active, mustChangePassword: !!account.mustChangePassword }));
+    const memberships = (await this.db.prepare("SELECT m.project_id AS projectId, m.email, m.user_id AS userId, m.created_at AS createdAt, a.name, a.active, 0 AS mustChangePassword FROM memberships m LEFT JOIN local_accounts a ON a.id = m.user_id ORDER BY m.project_id, m.email").all()).results;
+    const accounts = (await this.db.prepare("SELECT a.id, a.name, a.email, a.role, a.active, 0 AS mustChangePassword, CASE WHEN count(m.project_id) = 1 THEN min(m.project_id) ELSE NULL END AS projectId, count(m.project_id) AS assignmentCount FROM local_accounts a LEFT JOIN memberships m ON m.user_id = a.id OR lower(m.email) = lower(a.email) GROUP BY a.id ORDER BY a.name, a.email").all<{ active: number; mustChangePassword: number; [key: string]: unknown }>()).results.map((account) => ({ ...account, active: !!account.active, mustChangePassword: false }));
     const projects = await Promise.all(PROJECTS.map(async (project) => {
       const counts = await this.db.prepare("SELECT (SELECT count(*) FROM documents WHERE project_id = ?) AS total, (SELECT count(*) FROM memberships WHERE project_id = ?) AS members").bind(project.id, project.id).first();
       return { ...project, ...counts };
     }));
     const answerKeys = await Promise.all((["legal", "chemistry"] as const).map(async (domain) => {
       const key = await this.key(domain);
-      return { domain, version: key?.version ?? "guidelines-v1", confirmed: !!key, answers: key ? JSON.parse(key.answers) : null, proposedAnswers, confirmedAt: key?.confirmed_at ?? null };
+      return { domain, version: key?.version ?? defaultAnswerKeys.version, confirmed: !!key, answers: key ? JSON.parse(key.answers) : null, proposedAnswers: defaultAnswerKeys.answers[domain], confirmedAt: key?.confirmed_at ?? null };
     }));
     return { memberships, projects, answerKeys, questions, accounts };
   }
@@ -200,7 +200,7 @@ export class AnnotationService {
       }
       case "resetAnnotatorPassword": {
         const account = await this.annotatorAccount(input.email);
-        await new AuthService(this.db).resetPassword(account.id, input.password, { mustChangePassword: true });
+        await new AuthService(this.db).resetPassword(account.id, input.password);
         return { ok: true };
       }
       case "setAnnotatorActive": {
@@ -228,7 +228,7 @@ export class AnnotationService {
     const id = crypto.randomUUID();
     const membership = this.db.prepare("INSERT INTO memberships (project_id, email, user_id, created_at) VALUES (?, ?, ?, ?)").bind(project.id, email, id, new Date().toISOString());
     try {
-      const account = await new AuthService(this.db).createAccount({ id, name, email, password: input.password, role: "annotator", mustChangePassword: true }, [membership]);
+      const account = await new AuthService(this.db).createAccount({ id, name, email, password: input.password, role: "annotator" }, [membership]);
       return { ok: true, account, projectId: project.id };
     } catch (error) {
       if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "An account or project assignment already exists for this email. Use the existing account controls; no new account was created.");

@@ -35,7 +35,6 @@ export async function service() {
   const user = await actor();
   if (!user) throw new ApiError(401, "Sign in to continue.");
   assertExpectedActor((await headers()).get("X-Annotation-Actor"), user);
-  if (user.mustChangePassword) throw new AuthError(403, "Change your temporary password before opening your workspace.", "PASSWORD_CHANGE_REQUIRED");
   const instance = new AnnotationService(database(), user);
   await instance.claimInvitations();
   return instance;
